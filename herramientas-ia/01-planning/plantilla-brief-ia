@@ -1,0 +1,443 @@
+# 🌿 Greentor — Technical Brief
+
+> **Plataforma de Riesgos ESG No Financieros con IA**
+
+![Version](https://img.shields.io/badge/versión-MVP%20v1.3-006F63?style=flat-square)
+![Status](https://img.shields.io/badge/estado-En%20desarrollo-C47A18?style=flat-square)
+![Stack](https://img.shields.io/badge/stack-React%20%2B%20Supabase-84B3E2?style=flat-square)
+![Confidential](https://img.shields.io/badge/clasificación-Confidencial-B83228?style=flat-square)
+
+| Campo | Detalle |
+|---|---|
+| **Documento** | Technical Brief — Plataforma ESG |
+| **Versión** | MVP v1.3 — Onboarding Automático |
+| **Fecha** | Marzo 2026 |
+| **Clasificación** | Confidencial |
+| **Audiencia** | Equipo técnico, producto y stakeholders |
+
+---
+
+## Tabla de contenido
+
+1. [Título y Contexto](#1-título-y-contexto)
+2. [Objetivo Funcional](#2-objetivo-funcional)
+3. [Stack Tecnológico](#3-stack-tecnológico)
+4. [Secciones de la Plataforma](#4-secciones-de-la-plataforma)
+5. [Estilo Visual y UX](#5-estilo-visual-y-ux)
+6. [Constraints](#6-constraints)
+7. [Definition of Done](#7-definition-of-done)
+8. [Roadmap Post-MVP](#8-roadmap-post-mvp)
+9. [Glosario](#9-glosario)
+
+---
+
+## 1. Título y Contexto
+
+### 1.1 Título
+
+**Greentor — Plataforma de Riesgos ESG No Financieros con IA**
+
+### 1.2 Contexto
+
+Las empresas enfrentan una presión creciente de reguladores, inversionistas y mercados para medir, reportar y gestionar sus riesgos ambientales, sociales y de gobernanza (ESG). Sin embargo, la mayoría de las herramientas disponibles son complejas, costosas o están diseñadas para grandes corporaciones con equipos dedicados de sostenibilidad.
+
+Greentor nace para democratizar el acceso a la medición de riesgos ESG, ofreciendo una plataforma inteligente, alineada a estándares internacionales (CSRD/ESRS, IFRS S1/S2), que permite a empresas medianas identificar y gestionar sus riesgos de impacto no financiero con un enfoque práctico y accionable.
+
+El producto combina una biblioteca de riesgos sectoriales con un motor de scoring híbrido alimentado por datos externos verificados (World Bank, WRI Aqueduct, TI CPI) y las respuestas específicas de cada empresa, generando un diagnóstico de materialidad con un ranking priorizado de riesgos ESG y recomendaciones de acción concretas.
+
+Un diferenciador clave es el **Onboarding Inteligente**: al registrar una empresa, el sistema dispara automáticamente un proceso de inteligencia de fuentes abiertas (web scraping + IA) que pre-popula el perfil ESG con información pública relevante — reportes publicados, noticias, controversias, información regulatoria y presencia digital. El cliente llega a una plataforma que ya *conoce* su empresa.
+
+> 💡 **Principio fundacional:** Un gerente de sostenibilidad debe poder completar su diagnóstico ESG completo en una sola sesión y obtener un reporte accionable al finalizar.
+
+---
+
+## 2. Objetivo Funcional
+
+El MVP de Greentor tiene como objetivo entregar una aplicación web funcional que permita:
+
+1. Que una empresa complete un **diagnóstico de riesgos ESG guiado**, dividido por secciones temáticas, sin fricción y con una experiencia simple y clara.
+2. Que el **onboarding sea inteligente**: el sistema pre-popula el perfil de la empresa con datos de fuentes abiertas (scraping + IA) automáticamente al registro, para que el cliente llegue a una plataforma que ya conoce su contexto ESG.
+3. Que el sistema **calcule automáticamente un score ESG** global y por pilar (E, S, G) usando el motor de scoring híbrido 30/70 (benchmark sectorial 30% + respuestas empresa 70%).
+4. Que se **genere un reporte de riesgo ESG exportable** con ranking de materialidad, nivel de exposición por pilar y recomendaciones de acción priorizadas. *(La cuantificación financiera — impacto EBITDA — no forma parte del MVP v1, se incluirá en v2.0.)*
+5. Que el **Super Admin de Greentor** pueda gestionar todas las empresas, usuarios, fuentes de datos, riesgos y suscripciones desde una consola centralizada.
+6. Que la plataforma sea **responsive, visualmente equilibrada y diseñada para enganchar** al usuario a completar el proceso.
+
+---
+
+## 3. Stack Tecnológico
+
+### 3.1 Frontend — Lovable
+
+El frontend del MVP se desarrolla en **Lovable**, que genera código React + TypeScript de forma nativa. Esta decisión reduce el tiempo de implementación inicial y permite iterar sobre los wireframes definidos de forma ágil.
+
+| Tecnología | Uso | Notas |
+|---|---|---|
+| React + TypeScript | Framework principal de UI | Generado nativamente por Lovable |
+| Tailwind CSS | Estilos y layout responsivo | Clases utilitarias, sin CSS custom inicial |
+| shadcn/ui | Componentes de UI (botones, tablas, modales) | Librería de componentes accesibles |
+| Recharts | Gráficas interactivas | Bar charts, donuts, sparklines, líneas de tendencia |
+| React Router | Navegación entre secciones | SPA con rutas por sección de diagnóstico |
+| React Hook Form | Formularios del diagnóstico | Validación y estado de formularios |
+| Zod | Validación de esquemas | Tipado estricto de respuestas del diagnóstico |
+
+### 3.2 Backend & Base de Datos — Supabase
+
+Supabase actúa como el backend completo del MVP: base de datos, autenticación, storage de documentos y lógica de negocio a través de Edge Functions.
+
+| Componente | Tecnología | Uso |
+|---|---|---|
+| Base de datos | PostgreSQL (Supabase) | Empresas, usuarios, respuestas, riesgos, scores |
+| Autenticación | Supabase Auth | Login, roles (Super Admin, Admin, Editor, Viewer) |
+| Storage | Supabase Storage | Documentos ESG subidos por empresas |
+| Lógica de negocio | Supabase Edge Functions (TypeScript) | Motor de scoring 30/70 |
+| APIs externas | Edge Functions | World Bank API, Aqueduct (static), CPI (static) |
+| Agente IA | Anthropic API via Edge Functions | Soporte suscripciones, análisis diagnóstico |
+| Tiempo real | Supabase Realtime | Dashboard SuperAdmin con actividad en vivo |
+| Web scraping | Firecrawl o Apify (Edge Function trigger) | Extracción de información pública para onboarding |
+| Procesamiento IA | Anthropic Claude API (Haiku/Sonnet) | Estructuración de datos scrapeados en perfil ESG |
+
+### 3.3 Motor de Scoring ESG
+
+El motor de scoring es el núcleo técnico de Greentor, implementado en Supabase Edge Functions.
+
+> ⚠️ Las variables de impacto financiero (% EBITDA, estimación USD) han sido removidas del MVP v1 basado en feedback de clientes. Se incorporarán en v2.0.
+
+| Variable / Fórmula | Descripción |
+|---|---|
+| `B` = Benchmark sectorial (0–100) | Score de referencia por industria y país |
+| `E` = Score empresa (0–100) | Derivado de las respuestas del diagnóstico |
+| `S` = Score país (0–100) | World Bank + TI CPI + Aqueduct |
+| `M(S) = 0.70 + S × 0.006` si S ≤ 50 | Multiplicador país — rango bajo riesgo [0.70, 1.00] |
+| `M(S) = 1.00 + (S−50) × 0.008` si S > 50 | Multiplicador país — rango alto riesgo [1.00, 1.40] |
+| `B' = MAX(5, MIN(95, B × M(S)))` | Benchmark ajustado por país |
+| `F = ROUND(0.30 × B' + 0.70 × E, 0)` | Score ESG final por IRO (0–100) |
+| Nivel de riesgo | 🔴 Alto: F < 40 / 🟡 Medio: 40 ≤ F < 70 / 🟢 Bajo: F ≥ 70 |
+| ~~Impacto % EBITDA~~ | *Removido — v2.0* |
+
+---
+
+## 4. Secciones de la Plataforma
+
+### 4.1 Arquitectura General
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    FLUJO DEL CLIENTE                        │
+│                                                             │
+│  [Registro por     [Scraping       [Validación    [Diagnós- │
+│   Greentor]   →     automático] →   de perfil] →  tico ESG] │
+│                                                             │
+│                    CONSOLA SUPER ADMIN                      │
+│                                                             │
+│  Empresas · Onboarding · Diagnóstico · Docs · Usuarios     │
+│  APIs & Fuentes · Tabla Riesgos · Suscripciones            │
+└─────────────────────────────────────────────────────────────┘
+```
+
+> 💡 **Principio de diseño central:** El cliente nunca debe sentir que está llenando un formulario desde cero. Greentor pre-carga su contexto antes del primer login, y durante el diagnóstico las preguntas aparecen con sugerencias inteligentes basadas en lo que el scraper ya encontró.
+
+---
+
+### 4.2 Onboarding Inteligente — Proceso Greentor
+
+El onboarding no es responsabilidad exclusiva del cliente. Es un proceso conjunto en el que Greentor prepara el terreno antes del primer acceso.
+
+| Fase | Descripción |
+|---|---|
+| **Fase 1** — Registro de empresa | El equipo de Greentor registra la empresa en el SuperAdmin: nombre, industria, país, URL web, LinkedIn y datos del contacto. **Al guardar, el scraper se dispara automáticamente.** |
+| **Fase 2** — Scraping automático (background) | Edge Function ejecuta Firecrawl/Apify sobre todas las fuentes simultáneamente: sitio web, reportes ESG (PDF), LinkedIn, noticias y registros regulatorios. Duración: 2–8 minutos. |
+| **Fase 3** — Procesamiento con IA | Claude (Haiku para velocidad, Sonnet para complejidad) estructura los datos crudos en campos del perfil ESG: políticas, compromisos, certificaciones, IROs mencionados, controversias, estándares de reporte. |
+| **Fase 4** — Perfil disponible en consola | El Super Admin recibe notificación cuando el perfil está listo. Puede revisarlo y editar campos incorrectos antes de enviar la invitación. Revisión opcional pero recomendada para la primera empresa de cada industria. |
+| **Fase 5** — Invitación y primer login | El cliente recibe su invitación y entra a una vista de *"Lo que sabemos de tu empresa"*. Su primera experiencia no es un formulario vacío. |
+
+#### Experiencia del cliente — Validar y Completar
+
+El cliente llega a una vista organizada por categorías. Su tarea no es llenar — es **validar y completar** lo que falta:
+
+- ✅ **Aceptar** el dato con un clic → se confirma como información oficial
+- ✏️ **Editar** si está desactualizado, incompleto o requiere precisión
+- ❌ **Rechazar** si es incorrecto o no aplica
+- 🔗 **Ver la fuente** original (URL, documento, fecha) antes de aceptar
+- ➕ **Agregar** información que el scraper no encontró
+
+Durante el diagnóstico, cada pregunta con dato pre-cargado muestra la fuente de origen (ej. *"Encontrado en su Reporte de Sostenibilidad 2024, pág. 12"*).
+
+> 🔒 **Principio de integridad:** El sistema nunca auto-responde preguntas del diagnóstico sin validación explícita del cliente. Todos los datos pre-cargados son sugerencias — el cliente es propietario y responsable de sus respuestas finales.
+
+#### Fuentes del scraper — MVP v1
+
+| Fuente | Información extraída | Método |
+|---|---|---|
+| Sitio web corporativo | Políticas de sostenibilidad, compromisos, certificaciones, cadena de valor | Firecrawl / web crawl |
+| Reportes ESG publicados (PDF) | IROs mencionados, métricas, estándares (GRI, SASB, TCFD), años de reporte | Firecrawl + Claude Document API |
+| LinkedIn empresa | Tamaño, industria, ubicaciones, descripción corporativa | Apify LinkedIn Scraper |
+| Noticias y medios | Controversias ESG, litigios, multas regulatorias, reconocimientos | Firecrawl + búsqueda web |
+| Registros públicos | Razón social, RUT/NIT, tamaño legal, sector regulado, sanciones | Scraping registros nacionales |
+
+---
+
+### 4.3 Flujo del Usuario Empresa (Cliente)
+
+#### `01` Bienvenida — Valida y Completa tu Perfil
+
+> El cliente NO llena un formulario desde cero. Llega a *"Lo que sabemos de tu empresa"* y valida en 5–15 minutos.
+
+- **Información general:** nombre, industria, país, tamaño, descripción, web, LinkedIn
+- **Lo que encontramos:** reportes ESG, políticas, certificaciones, compromisos declarados
+- **Noticias y contexto:** menciones en medios, controversias ESG, reconocimientos
+- **Información regulatoria:** sector regulado, registros públicos, sanciones si aplica
+- Cada dato muestra su fuente con link al original
+- Campos abiertos para completar lo que el scraper no encontró
+- Al terminar la validación → se activa el diagnóstico
+
+#### `02` Dashboard Principal
+
+> Vista de resumen del estado ESG al completar cada sección.
+
+- Score ESG global con donuts por pilar E / S / G
+- Ranking de materialidad: IROs por nivel de riesgo (🔴 Alto / 🟡 Medio / 🟢 Bajo)
+- Progreso del diagnóstico (% completado por sección)
+- Top riesgos críticos con recomendaciones
+- Plan de acción con estado de cada tarea
+
+#### `03` Diagnóstico ESG — Por Secciones
+
+> Una sección a la vez. Cada pregunta con dato pre-cargado muestra una sugerencia inteligente con fuente de origen.
+
+| Sección | Temas |
+|---|---|
+| **A — Ambiental** | Emisiones GHG, gestión hídrica, biodiversidad, riesgo físico climático |
+| **B — Social** | Fuerza laboral, cadena de suministro, comunidades afectadas |
+| **C — Gobernanza** | Estructura directiva, ciberseguridad, conducta empresarial |
+| **D — Transición climática** | Estrategia de descarbonización, targets, escenarios |
+
+- Score parcial calculado en tiempo real al completar cada sección
+- Progreso guardado automáticamente — el usuario puede continuar después
+
+#### `04` Materialidad y Reportes
+
+- Matriz de doble materialidad cualitativa: impacto en el negocio vs impacto en el mundo
+- Ranking de IROs: Alto / Medio / Bajo con justificación por pilar
+- **Reporte PDF exportable:** score ESG, diagnóstico por sección, mapa de materialidad, plan de acción
+- Recomendaciones de acción priorizadas por IRO y urgencia
+- *(Sin cuantificación financiera en MVP v1 — se incorpora en v2.0)*
+
+#### `05` Documentos
+
+- Subida de documentos por categoría (Emisiones, Políticas, Agua, Gobernanza, Riesgos)
+- Vista de todos los documentos con estado de validación
+- Vinculación de documentos a respuestas del diagnóstico
+
+---
+
+### 4.4 Panel Super Admin (Operador Greentor)
+
+| Sección | Funcionalidad |
+|---|---|
+| **Inicio / Landing** | KPIs globales, gráfica de uso por empresa, actividad reciente, resumen de fuentes |
+| **Empresas afiliadas** | CRUD completo con score, plan, estado diagnóstico y estado del scraping |
+| **Onboarding & Scraping** | Registro de empresa → scraper automático → vista del perfil (En progreso / Listo / Error) → re-ejecución manual si necesario |
+| **Diagnóstico & Respuestas** | Ver y editar respuestas de cualquier empresa. Recalcula score al editar. |
+| **Documentos** | Todos los archivos de todas las empresas. Filtro por empresa y categoría. |
+| **Usuarios & Roles** | Gestión cross-empresa: agregar, editar, suspender, eliminar usuarios. |
+| **APIs & Fuentes** | Estado de APIs, latencia, IROs vinculados, matriz de impacto por industria. |
+| **Tabla de Riesgos** | CRUD de IROs. Expande para ver pesos por industria. Activar/desactivar. |
+| **Suscripciones** | Estado de pagos por empresa + Agente IA para gestión de suscripciones. |
+
+---
+
+## 5. Estilo Visual y UX
+
+### 5.1 Principios de Diseño
+
+| Principio | Aplicación |
+|---|---|
+| **Carga visual equilibrada** | Máximo 3 elementos de información por tarjeta. Espaciado generoso. |
+| **Simple y fácil de entender** | Textos cortos, iconografía clara, sin jerga técnica en la interfaz. |
+| **Diseñado para enganchar** | Progreso visible, micro-animaciones al completar secciones, feedback inmediato. |
+| **Responsive first** | Diagnóstico funcional en mobile y tablet. Super Admin optimizado para desktop. |
+
+### 5.2 Paleta de Colores
+
+> ⚠️ Versión inicial del MVP — será refinada en la siguiente etapa de diseño.
+
+| Token | Hex | Uso |
+|---|---|---|
+| `brand` | `#006F63` | Color principal — CTAs, elementos activos, scores bajos (riesgo bajo) |
+| `brandDark` | `#005249` | Hover, sidebar gradient |
+| `brandLight` | `#E8F3F1` | Fondos de chips activos, highlights |
+| `bg` | `#FFF7EF` | Fondo principal (crema cálido) |
+| `surface` | `#FFFFFF` | Fondo de tarjetas |
+| `surfaceAlt` | `#FBF3E8` | Filas alternas, hover states |
+| `blue` | `#84B3E2` | Secundario — gráficas, pilar Social |
+| `teal` | `#6EABA4` | Secundario — gráficas, tendencias |
+| `amber` | `#C47A18` | Riesgo medio, scores intermedios (40–70) |
+| `red` | `#B83228` | Riesgo alto, scores críticos (<40), alertas |
+| `purple` | `#6B5B9E` | Pilar Gobernanza, plan Enterprise |
+| `ink` | `#0D1A16` | Texto principal |
+| `inkMid` | `#4A6860` | Texto secundario, subtítulos |
+| `inkLo` | `#9EB8B0` | Texto terciario, placeholders |
+
+### 5.3 Tipografía
+
+| Rol | Fuente |
+|---|---|
+| Títulos y headings | **Syne** — 800 weight. KPIs, scores grandes, nombres de sección. |
+| Interfaz general | **Figtree** — 400/500/600/700. Body text, labels, botones, navegación. |
+| Datos y código | **DM Mono** — 400/500. Scores numéricos, fechas, IDs de IROs, valores API. |
+
+### 5.4 Patrones de UI
+
+- Sidebar verde degradado con estado activo claramente marcado
+- Tarjetas con borde `#E6D8C8` y sombra muy suave — sin elevación excesiva
+- Acento superior de 3px en tarjetas importantes (gradiente verde → teal → azul)
+- Badges semánticos: 🟢 verde = activo/bajo, 🟡 ámbar = medio, 🔴 rojo = crítico/alto
+- Barras de progreso animadas para completitud del diagnóstico
+- Botón primario verde sólido + outline para acciones secundarias
+- Tablas con filas alternas crema/blanco
+
+---
+
+## 6. Constraints
+
+| Constraint | Descripción | Mitigación |
+|---|---|---|
+| **Lovable — complejidad** | Puede tener fricción con lógica de scoring compleja | Motor de scoring en Supabase Edge Functions, no en frontend |
+| **API World Bank** | Latencia variable (~212ms) y posible downtime | Fallback automático al benchmark estático si no responde en 3s |
+| **GFW API no disponible** | Requiere API key, está en fase "planeado" | BIODIVERSITY usa benchmark estático en MVP. GFW en v1.1. |
+| **Escala de datos** | A 50+ empresas Supabase puede necesitar optimización | Queries indexadas desde el inicio. Revisar plan Supabase a los 20 clientes. |
+| **Exportación PDF** | Requiere librería adicional (React-PDF o Puppeteer) | React-PDF en frontend o Puppeteer en Edge Function |
+| **Motor de scoring versión** | La fórmula 30/70 puede necesitar calibración con datos reales | Versionar fórmula en DB. SA puede ajustar pesos sin código. |
+| **Mobile — diagnóstico** | Formularios complejos difíciles en pantallas pequeñas | Una pregunta por pantalla en mobile (wizard vertical) |
+| **Roles y permisos** | RLS en Supabase requiere configuración cuidadosa | Definir RLS policies antes de cargar datos reales |
+| **Scraper — calidad de datos** | Puede extraer información desactualizada o de empresa equivocada | Revisión opcional por SA antes de dar acceso. El cliente siempre valida. |
+| **Scraper — disponibilidad web** | Algunas empresas tienen poco contenido público | Funciona con datos parciales. El cliente completa lo que falta manualmente. |
+| **Scraper — costo por uso** | Firecrawl/Apify tienen costo por créditos a escala | Estimar costo por empresa onboardeada. Evaluar si incluir en pricing. |
+| **Privacidad y fuentes** | Scraping puede tener restricciones legales (ej. LinkedIn) | Solo fuentes públicas indexables. No almacenar PII de individuos. |
+
+---
+
+## 7. Definition of Done
+
+> 🚨 El MVP se lanza **únicamente** cuando los criterios están verificados y aprobados por el equipo de producto.
+
+### 7.1 Funcionalidad Core
+
+| Criterio | Test de aceptación |
+|---|---|
+| ✅ Onboarding inteligente | Al registrar empresa en SuperAdmin, el scraper corre automáticamente y el perfil está listo en <10 min con ≥5 campos completados y fuente identificada |
+| ✅ Validación por cliente | El cliente puede revisar cada dato pre-cargado, ver su fuente, y aceptar/editar/rechazar con un clic. El diagnóstico solo se activa tras completar la validación. |
+| ✅ Diagnóstico por secciones | Las 4 secciones (A, B, C, D) se responden de forma independiente, guardan progreso y se reanudan en otra sesión |
+| ✅ Scoring automático | Al completar una sección, el score parcial se calcula y muestra en <2 segundos |
+| ✅ Score ESG global | Al completar todas las secciones, el score E/S/G y el score final se calculan correctamente con la fórmula 30/70 |
+| ✅ Reporte generado | El usuario exporta PDF con score, materialidad, nivel de riesgo por IRO y recomendaciones |
+| ✅ Ranking de materialidad | El reporte incluye IROs por nivel (Alto/Medio/Bajo) con justificación cualitativa por pilar |
+| ✅ Subida de documentos | El usuario sube documentos en ≥5 categorías y los ve correctamente en su panel |
+| ✅ Super Admin funcional | El SA gestiona empresas, usuarios, riesgos y suscripciones desde la consola |
+| ✅ Agente IA suscripciones | El agente IA responde sobre suscripciones y sugiere acciones en <5 segundos |
+
+### 7.2 Calidad Técnica
+
+| Criterio | Test de aceptación |
+|---|---|
+| ✅ Tests unitarios scoring | Suite de ≥10 tests cubre edge cases: score 0/50/100, país alto/bajo riesgo, niveles Alto/Medio/Bajo |
+| ✅ Tests de integración | World Bank API y fallback estático funcionan y se loggean correctamente |
+| ✅ Autenticación y roles | Viewer no edita. Admin empresa no ve otras empresas. SA tiene acceso total. |
+| ✅ RLS Supabase | Row Level Security activo en todas las tablas. Empresa A no accede a datos de empresa B. |
+| ✅ Performance | Diagnóstico carga en <3s. Dashboard SuperAdmin en <4s en conexión normal. |
+| ✅ Sin errores críticos | Sin errores 500 en flujos principales. Errores capturados con mensajes amigables en español. |
+
+### 7.3 Experiencia de Usuario
+
+| Criterio | Test de aceptación |
+|---|---|
+| ✅ Responsive | Funcional en mobile (375px), tablet (768px) y desktop (1280px+) |
+| ✅ Progreso visible | El usuario siempre sabe qué sección completa y qué % del diagnóstico lleva |
+| ✅ Feedback inmediato | Cada respuesta guardada muestra confirmación visual. Score se actualiza al completar sección. |
+| ✅ Navegación clara | Usuario sin entrenamiento navega, diagnostica y genera reporte sin instrucciones |
+| ✅ Estados de error claros | API caída, campo vacío o error de red → mensaje claro en español con siguiente paso |
+| ✅ Engage / completitud | En sesión de prueba con 5 usuarios, ≥4 completan el diagnóstico sin abandono |
+
+---
+
+## 8. Roadmap Post-MVP
+
+> Los cambios más relevantes respecto a la versión anterior: (1) cuantificación financiera/EBITDA se mueve a v2.0 por feedback de clientes, y (2) se prioriza el módulo de Riesgo Hídrico para FMCG en v1.2.
+
+| Módulo | Versión | Descripción |
+|---|---|---|
+| GFW API — Biodiversidad | `v1.1` | Integración con Global Forest Watch para datos de deforestación en tiempo real |
+| **Módulo Riesgo Hídrico — FMCG** | `v1.2` | Módulo especializado de estrés hídrico para consumo masivo. Ver §8.1. |
+| Benchmarks por subsector | `v1.2` | Refinamiento de benchmarks por subsector dentro de cada industria |
+| Comparativa entre empresas | `v1.3` | Dashboard de benchmarking anónimo entre empresas del mismo sector |
+| Cuantificación financiera (EBITDA) | `v2.0` | Impacto % EBITDA y USD por IRO. Removido del MVP v1 por feedback de clientes. |
+| CSRD Report automático | `v2.0` | Reporte CSRD/ESRS listo para auditoría generado desde el diagnóstico |
+| App mobile nativa | `v2.0` | iOS/Android para diagnóstico y alertas de riesgo |
+| Agente IA diagnóstico | `v2.0` | IA que guía activamente al usuario con preguntas de seguimiento |
+| Marketplace de acciones | `v3.0` | Conectar empresas con proveedores de soluciones ESG según riesgos identificados |
+
+### 8.1 Especificación — Módulo Riesgo Hídrico FMCG (v1.2)
+
+> **Audiencia objetivo:** empresas de consumo masivo (alimentos, bebidas, cuidado personal, limpieza del hogar) con operaciones en zonas de estrés hídrico medio-alto, que necesitan reportar riesgo hídrico a inversionistas o cumplir con CDP Water Security / TCFD.
+
+#### Componentes del módulo
+
+| Componente | Descripción |
+|---|---|
+| Huella hídrica operativa | Consumo por fuente (superficial, subterránea, municipal), proceso y ubicación geográfica |
+| Mapeo geográfico de cuencas | Geolocalización de plantas sobre mapa WRI Aqueduct 4.0. Nivel de riesgo por instalación. |
+| Stress testing hídrico | Escenarios: reducción de acceso al agua 20% / 40% / 60% por cuenca. Impacto en continuidad operativa. |
+| Dependencia de cadena | Proveedores clave expuestos a zonas de alto estrés hídrico |
+| Score hídrico especializado | Score 0–100 independiente del score ESG general. Exposición física + gestión + resiliencia. |
+| Comparativa sectorial FMCG | Benchmarking vs estándares del sector (intensidad hídrica por unidad de producto) |
+| Recomendaciones de resiliencia | Eficiencia, reciclaje, diversificación de fuentes, certificaciones (Alliance for Water Stewardship) |
+| Preparación CDP Water Security | Respuestas pre-llenadas para cuestionario CDP Water Security (no envío automático) |
+
+#### Fuentes de datos del módulo hídrico
+
+| Fuente | Datos utilizados |
+|---|---|
+| WRI Aqueduct 4.0 *(ya integrado)* | Estrés hídrico por cuenca, variabilidad interanual, riesgo de inundación, proyección 2030–2050 |
+| World Bank Climate Change API | Precipitación histórica y proyectada, temperatura, índices de sequía |
+| FAO AQUASTAT | Estadísticas de uso de agua por sector, intensidad hídrica agrícola e industrial |
+| CDP Water Disclosure | Benchmarks de métricas reportadas por empresas FMCG peers (datos públicos) |
+| Entrada manual empresa | Consumo real por planta (m³/año), fuentes de abastecimiento, sistemas de reciclaje |
+
+---
+
+## 9. Glosario
+
+| Término | Definición |
+|---|---|
+| **Onboarding inteligente** | Proceso de Greentor que pre-popula el perfil ESG de una empresa con datos públicos antes del primer login del cliente |
+| **Scraper / Web scraping** | Proceso automatizado de extracción de información de sitios web y fuentes públicas. En Greentor usa Firecrawl o Apify. |
+| **Firecrawl** | Herramienta de web scraping compatible con Edge Functions que extrae contenido de sitios y PDFs en formato estructurado |
+| **ESG** | Environmental, Social & Governance — Marco de evaluación de riesgos no financieros |
+| **IRO** | Impact, Risk & Opportunity — Unidad de medición de riesgo ESG en estándar CSRD/ESRS |
+| **CSRD** | Corporate Sustainability Reporting Directive — Directiva europea de reporte de sostenibilidad |
+| **ESRS** | European Sustainability Reporting Standards — Estándares técnicos de la CSRD |
+| **IFRS S1/S2** | International Financial Reporting Standards para sostenibilidad |
+| **Score ESG** | Puntuación 0–100 que refleja el nivel de gestión de riesgos ESG de una empresa |
+| **Motor 30/70** | Algoritmo propietario: 30% benchmark sectorial + 70% respuestas empresa |
+| **Materialidad** | Relevancia de un riesgo ESG en función de su impacto en el negocio y en el mundo — evaluación cualitativa en MVP v1 |
+| **Estrés hídrico** | Condición en la que la demanda de agua supera la disponibilidad en una cuenca |
+| **WRI Aqueduct** | Base de datos global de riesgo hídrico por cuenca del World Resources Institute |
+| **FMCG** | Fast-Moving Consumer Goods — empresas de consumo masivo |
+| **CDP Water** | Carbon Disclosure Project — Water Security questionnaire usado por inversionistas institucionales |
+| **Huella hídrica** | Volumen total de agua consumida, evaporada o contaminada en las operaciones (m³/año) |
+| **Super Admin** | Operador interno de Greentor con acceso total a todas las empresas y configuración |
+| **Admin empresa** | Usuario administrador dentro de una empresa cliente específica |
+| **RLS** | Row Level Security — Mecanismo de Supabase para aislar datos entre empresas |
+| **Edge Function** | Función serverless de Supabase ejecutada en el borde para lógica de negocio |
+| **Benchmark** | Score de referencia por industria derivado de datos externos verificados |
+| **MVP** | Minimum Viable Product — versión mínima funcional para lanzamiento |
+
+---
+
+<div align="center">
+
+**Greentor — Midiendo lo que importa**
+
+*Technical Brief MVP v1.3 · Confidencial · © 2026 Greentor*
+
+</div>
