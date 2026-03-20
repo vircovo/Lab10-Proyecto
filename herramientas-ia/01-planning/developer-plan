@@ -1,0 +1,782 @@
+ Plan de Implementación: Greentor MVP v1.3
+## Versión en Lenguaje Natural
+
+---
+
+## Resumen Ejecutivo
+
+**Objetivo:** Construir una plataforma web de diagnóstico de riesgos ESG con onboarding automático inteligente, motor de scoring híbrido, y panel de administración centralizado.
+
+**Stack:** Lovable (frontend React generado) + Supabase (backend PostgreSQL + Edge Functions)
+
+**Equipo:** 2 personas en paralelo
+- 1 Developer Frontend: orquesta Lovable (describe features → generador produce código → refina iterativamente)
+- 1 Developer Backend: construye APIs, base de datos, integraciones con servicios externos
+
+**Timeline:** 10-12 semanas
+
+**Prioridad Core:** Motor de scoring → luego UI diagnóstico → luego onboarding inteligente → luego super admin
+
+---
+
+## Fases de Implementación
+
+### FASE 0: Setup e Infraestructura (Semana 1)
+
+**¿Qué se hace?**
+
+Este es el setup fundamental. Ambos equipos trabajan en paralelo asegurando que todos los servicios externos estén listos y que frontend + backend puedan comunicarse.
+
+**Backend:**
+- Crear un proyecto nuevo en Supabase (o usar uno existente)
+- Configurar la autenticación de Supabase con roles de usuario (Super Admin, Admin Empresa, Editor, Viewer)
+- Crear un repositorio Git para las Edge Functions (donde vivirá toda la lógica de negocio del backend)
+- Documentar en un archivo las credenciales y API keys necesarias (World Bank, Anthropic Claude, Firecrawl, etc.)
+
+**Frontend:**
+- Iniciar un proyecto en Lovable describiendo brevemente qué es Greentor (plataforma ESG diagnosis)
+- Lovable genera automáticamente una estructura React lista con React Router, Tailwind CSS, shadcn/ui pre-integrados
+- No hay que instalar dependencias manualmente — Lovable lo hace todo
+- Configurar variables de entorno del proyecto Lovable con la URL y claves de Supabase
+
+**Ambos:**
+- Definir la especificación de APIs que el frontend va a consumir (qué endpoints, qué parámetros, qué respuestas espera)
+- Crear un documento con la estructura básica de la base de datos (qué tablas existirán, qué relaciones)
+- Documentar la matriz de permisos: qué rol accede a qué tabla, qué puede hacer (crear, editar, leer, etc.)
+
+**Verificación de que está listo:** Los equipos pueden hacer un request de prueba entre sí (frontend hace un POST a un endpoint dummy del backend). JWT de autenticación funciona. API keys están configuradas.
+
+---
+
+### FASE 1: Backend - Base de Datos y Autenticación (Semana 1-2)
+
+**Dependencia:** Fase 0 completada
+
+**¿Qué se hace?**
+
+Estructurar toda la base de datos PostgreSQL y crear los endpoints iniciales de autenticación. Este es el cimiento sobre el que todo lo demás se construye.
+
+**Creación de Tablas:**
+
+- **Tabla Companies:** Almacena información de cada empresa cliente (nombre, industria, país, tamaño, sitio web, LinkedIn, estado de onboarding)
+- **Tabla Users:** Almacena usuarios con su role (Super Admin, Admin, Editor, Viewer), empresa asignada, estado activo/suspendido
+- **Tabla Survey Responses:** Guarda cada respuesta del diagnóstico ESG (qué empresa, qué sección A/B/C/D, qué pregunta, qué respondió, si fue validada por el cliente)
+- **Tabla Companies Profile:** Pre-población del perfil con datos scrapeados (campo: valor, fuente, fecha)
+- **Tabla Risks (IROs):** Catálogo de Riesgos de Impacto ESG (código, nombre, sector, pilar E/S/G, score base, activo/inactivo)
+- **Tabla Scores:** Historial de scores calculados (empresa, pilar, valor, fecha, versión de fórmula)
+- **Tabla Documents:** Archivos subidos por clientes (empresa, categoría, nombre archivo, URL en storage, fecha)
+- **Tabla Subscriptions:** Plan de cada empresa (tipo plan, estado, fecha inicio, vencimiento)
+- **Tabla Audit Log:** Registro automático de quién hizo qué cambio, cuándo, en qué tabla
+- **Tabla Onboarding Jobs:** Estado de los trabajos de web scraping (en cola, en ejecución, completado, error)
+
+**Configurar Seguridad (Row Level Security - RLS):**
+
+- Super Admin: ve y puede editar todo
+- Admin Empresa: solo ve su propia empresa y usuarios dentro de ella
+- Editor Empresa: puede editar respuestas de su empresa
+- Viewer Empresa: solo lectura
+
+Estas restricciones se configuran a nivel de base de datos para que sea imposible eludir desde el frontend.
+
+**Crear Endpoints de Autenticación (Edge Functions):**
+
+- Login: recibe email/password, retorna JWT token
+- Logout: invalida sesión
+- Register: crea nuevo usuario
+- Get Current User: retorna usuario logueado con su rol
+
+**Configurar Storage en Supabase:**
+
+- Crear carpeta para documentos (donde se guardarán PDFs, excels, etc.)
+- Configurar permisos para que cada empresa solo vea sus documentos
+
+**Verificación:** Se puede fazer login/logout en el backend. Tablas existen. RLS está activa (un usuario no puede ver datos de otra empresa).
+
+---
+
+### FASE 2: Backend - Motor de Scoring (Semana 2-4) ⚠️ CRÍTICO
+
+**Dependencia:** Fase 1 completada
+
+**¿Qué se hace?**
+
+Este es el núcleo técnico de Greentor. El motor calcula automáticamente el score ESG usando una fórmula que combina datos de referencia internacional con las respuestas de cada empresa. Es el componente más importante porque de él depende toda la lógica de assessment.
+
+**Lógica del Motor de Scoring (Fórmula 30/70):**
+
+El motor toma en cuenta tres componentes:
+
+1. **Benchmark Sectorial (B):** ¿Cuál es el score promedio para empresas del mismo sector y tamaño? Se calcula promediando una lista de Riesgos ESG típicos de esa industria.
+
+2. **Score del País (S):** ¿Cuál es el riesgo ESG del país donde opera la empresa? Se obtiene de:
+   - World Bank API (indicadores económicos, clima, gobernanza)
+   - Base de datos de Transparencia Internacional (corrupción)
+   - Datos de WRI Aqueduct (estrés hídrico) — estos son estáticos, pre-cacheados
+
+3. **Score de la Empresa (E):** ¿Cómo respondió la empresa a nuestro diagnóstico? Se calcula normalizando y promediando todas sus respuestas a las preguntas.
+
+**La Fórmula:**
+
+- Se calcula un "multiplicador país" que ajusta el benchmark según riesgo del país
+- Luego se combina: 30% benchmark + 70% respuestas empresa
+- Resultado: Score ESG final entre 0-100 por cada pilar (Ambiental, Social, Gobernanza) y un score general
+
+**Ejemplo:** Una empresa en Brasil con benchmark 60, multiplicador país 1.1 (Brasil tiene riesgo medio), y respondió las preguntas con score 55 → Score final = 0.30 × (60 × 1.1) + 0.70 × 55 = 54.3
+
+**Implementación Técnica:**
+
+- Crear una función Edge en Supabase que ejecute este cálculo
+- Cuando el frontend dice "calcula el score para la empresa X, sección A", esta función trae los datos necesarios de:
+  - Base de datos local (benchmark, respuestas)
+  - World Bank API con reintentos automáticos
+  - Cache local si World Bank falla
+- Retorna un número entre 0-100 y al nivel de riesgo (🔴 Alto <40 / 🟡 Medio 40-70 / 🟢 Bajo ≥70)
+- Guarda el resultado en la tabla Scores para historial
+
+**Robustez y Fallbacks:**
+
+- Si World Bank API tarda mucho (>3 segundos), el sistema automáticamente usa valores pre-cacheados
+- Si falla completamente, usa scores históricos del país
+- Si la empresa no ha respondido todas preguntas, calcula parcialmente los scores que puede
+
+**Testing Exhaustivo:**
+
+Se escriben pruebas automáticas para verificar:
+- Score 0, 50, 100 se calculan correctamente
+- Países de bajo riesgo bajan el score apropiadamente
+- Países de alto riesgo suben el score apropiadamente
+- Cuando World Bank falla, el sistema no se cae
+- Cuando no hay respuestas, el sistema no divide por cero
+
+Target: 15+ pruebas automáticas que cubran todos los escenarios
+
+**Verificación:** Motor pasa todas las pruebas. Scores se calculan en < 2 segundos. Fallback a datos locales funciona.
+
+---
+
+### FASE 2B: Integraciones con APIs Externas (Semana 2-3, paralelo a Fase 2)
+
+**Dependencia:** Fase 1 completada
+
+**¿Qué se hace?**
+
+Integrar los servicios externos que alimentan el motor de scoring.
+
+**World Bank API:**
+- Conectar a la API pública de World Bank
+- Extraer indicadores por país (GDP, clima, gobernanza)
+- Cachear respuestas por 24 horas para no saturar
+- Si la API no responde, usar fallback local
+
+**Índice de Corrupción (TI CPI):**
+- Descargar datos anuales de Transparencia Internacional
+- Cargarlos en una tabla local para referencia rápida
+- Estos datos no cambian frecuentemente, así que se actualizan 1-2 veces al año
+
+**WRI Aqueduct (Estrés Hídrico):**
+- Descargar mapa global de estrés hídrico pre-procesado
+- Guardarlo en tabla local (coordenadas → nivel de estrés)
+- Cuando la empresa da sus coordenadas, buscar el nivel de estrés hídrico de su zona
+
+**Storage para Reportes:**
+- Preparar la carpeta donde se guardarán PDFs de reportes generados
+- Configurar permisos para que cada empresa solo vea sus reportes
+
+**Health Check Automático:**
+- Crear un verificador que cada 5 minutos prueba si las APIs están respondiendo
+- Muestra en dashboard del Super Admin: "World Bank: ✓ Online", "TI CPI: ✓ Data from 2025", etc.
+
+**Verificación:** World Bank responde bien. Índices descargados. Aqueduct cacheado. Health check funciona.
+
+---
+
+### FASE 3: Frontend - Autenticación y Layout Base (Semana 1-2, paralelo a Fase 1)
+
+**Dependencia:** Fase 0 completada + endpoints de auth de Fase 1
+
+**¿Qué se hace?**
+
+El frontend necesita estructura base: login, navegación, autenticación. En lugar de escribir código React manualmente, el dev usa Lovable.
+
+**Workflow con Lovable:**
+
+1. El dev abre Lovable y describe: "Necesito una página de login donde ingreso email y password. La integración es con Supabase. Si el login es exitoso, me redirige al dashboard según mi rol."
+2. Lovable genera automáticamente: componente de formulario, hook useAuth, ProtectedRoute (HOC para rutas protegidas), almacenamiento de JWT
+3. El dev testea en Lovable preview: intenta login, verifica que funciona
+4. Si necesita cambios, le describe a Lovable nuevamente o edita el código exportado en Git
+5. El código se exporta periódicamente a Git para sincronización
+
+**Lo que Lovable genera (automáticamente):**
+
+- Página de login con email/password, validación, manejo de errores en español
+- Hook `useAuth()` para acceder al usuario actual desde cualquier componente
+- Context de autenticación que persiste el token en el navegador
+- ProtectedRoute para rutas que requieren autenticación
+
+**Sidebar de Navegación:**
+
+El dev describe: "Crea un sidebar responsive que muestre diferentes opciones según el role del usuario. Super Admin ve: Dashboard, Empresas, Onboarding, Diagnóstico, Documentos, Usuarios, APIs, Riesgos, Suscripciones. Admin empresa ve: Dashboard, Mi Diagnóstico, Documentos, Usuarios. El sidebar colapsa en mobile."
+
+Lovable genera: componente Sidebar con lógica de condicionales por rol, animaciones de colapso, estilos responsive.
+
+**Dashboard Inicial:**
+
+El dev describe: "Quiero un dashboard con grid de tarjetas. Una muestra el score ESG global como donut chart (E/S/G en colores diferentes). Otra muestra la barra de progreso del diagnóstico. Otra lista los riesgos más críticos. Otra muestra acciones recientes."
+
+Lovable genera: componentes para cada tarjeta, placeholders para gráficas, estilos con paleta Greentor (verde #006F63, crema #FFF7EF, ámbar #C47A18, rojo #B83228).
+
+**Tipos TypeScript:**
+
+Lovable genera tipos base. El dev crea un archivo `types/index.ts` en Git con tipos más detallados (User, Company, SurveyResponse, Score, Risk, Document, Subscription) si lo necesita.
+
+**Contextos adicionales:**
+
+El dev puede describir "Necesito un context para la empresa seleccionada actualmente" y Lovable genera CompanyContext.
+
+**Verificación:** Login funciona en Lovable preview. Sidebar cambia según rol simulado. Dashboard renderiza sin errores. Código es exportable a Git sin issues.
+
+---
+
+### FASE 4: Frontend - Diagnóstico ESG (Semana 3-5, paralelo con Fase 2)
+
+**Dependencia:** Fase 3 completada + Fase 2 (motor de scoring) para cálculos en vivo
+
+**¿Qué se hace?**
+
+El diagnóstico es el flujo principal para el cliente. Son 4 secciones (Ambiental, Social, Gobernanza, Transición Climática), cada una con preguntas. El cliente responde, las respuestas se guardan automáticamente, y el score se recalcula en tiempo real.
+
+**Estructura de las Preguntas:**
+
+El backend prepara una tabla con todas las preguntas. Cada pregunta tiene: sección (A/B/C/D), número, texto, tipo (opción múltiple, checkbox, texto libre), opciones disponibles, cuál es la respuesta "correcta" (para cálculo de score).
+
+El frontend consume estas preguntas del backend llamando a un endpoint: "Dame las preguntas de la sección A".
+
+**Página de Diagnóstico (Lovable):**
+
+El dev describe: "Crea 4 secciones de diagnóstico (A/B/C/D) con preguntas. En mobile, una pregunta por pantalla (wizard vertical). En desktop, toda la sección en scroll. Cada pregunta es un card con el texto, opciones de radio/checkbox, y un botón Save. Cuando salvo, muestra 'Guardando...' y luego 'Guardado ✓'."
+
+Lovable genera: componentes QuestionCard, SectionA/B/C/D páginas, lógica de guardado progresivo con hooks.
+
+**Guardado Automático:**
+
+Cada 2-3 segundos (sin que el usuario haga nada), si hay cambios, se envía un requests al backend para guardar. Esto asegura que si el navegador se cierra, no pierde progreso.
+
+Visualmente: pequeño badge en la esquina que dice "Guardando..." mientras carga, y "Guardado ✓" cuando termina.
+
+**Cálculo de Score en Tiempo Real:**
+
+Cuando el usuario termina una sección completa (respondió todas las preguntas), el frontend llama al endpoint del motor de scoring en el backend.
+
+El backend calcula el score y retorna un número + código de riesgo (Alto/Medio/Bajo).
+
+El frontend muestra el score actualizado en el dashboard en tiempo real con animación (el número crece de 0 al nuevo score, tipo contador).
+
+**Barra de Progreso:**
+
+En todo momento, el usuario ve: "Sección A: ✅ 12/12 respondidas. Sección B: 0/10. Sección C: 5/8. Sección D: 0/15. Total: 35%"
+
+**Validación:**
+
+Si el usuario intenta ir a la siguiente sección sin completar la actual, muestra un cartel: "Por favor completa todas las preguntas antes de continuar."
+
+**Verificación:** Las 4 secciones funcionan. Guardado automático persiste (puedo cerrar y abrir browser, mis respuestas están). Score recalcula en < 2s. Progress bar correcta. Mobile y desktop funcionan.
+
+---
+
+### FASE 5: Backend - Onboarding Inteligente con Scraping (Semana 4-6)
+
+**Dependencia:** Fase 1 (DB), Fase 2 (scoring)
+
+**¿Qué se hace?**
+
+Este es el diferenciador clave de Greentor. Cuando el Super Admin registra una nueva empresa, un proceso automático scrappea su presencia web pública y pre-popula el perfil con IA.
+
+**Flujo del Onboarding Automático:**
+
+1. **Registro en Super Admin:** El Super Admin abre una página, ingresa nombre de empresa, industria, país, URL web, perfil LinkedIn, contacto. Presiona guardar.
+
+2. **Dispara Scraper Automáticamente:** Al guardar, el backend automáticamente crea un "job de onboarding" que entra en cola para ejecutarse.
+
+3. **Scraping Paralelo en 5 Frentes:**
+
+   a. **Sitio Web:** Herramienta (Firecrawl o Apify) descarga todo el sitio web, limpia el HTML, extrae políticas, compromisos, certificaciones que menciona.
+   
+   b. **Reportes ESG (PDFs):** Busca automáticamente "nombre empresa ESG report" en Google, descarga los top 3 PDFs, extrae texto. Busca: estándares mencionados (GRI, SASB, TCFD), métricas reportadas, años de cobertura.
+   
+   c. **LinkedIn:** Scrappea la página de la empresa (información pública) para obtener: tamaño de empleados, descripción oficial, ubicaciones.
+   
+   d. **Noticias y Medios:** Busca "nombre empresa sostenibilidad ESG controversia demanda" y scrappea los primeros 10 resultados. Extrae: título, fecha, URL.
+   
+   e. **Registros Públicos:** Si es sector regulado, busca en registros nacionales (RUT, registros de medio ambiente, etc.).
+
+   Todas estas búsquedas se hacen en paralelo, no una tras otra, así que tarda 2-8 minutos total.
+
+4. **Procesamiento con IA (Claude):** Todos estos datos crudos se envían a Claude (modelo Haiku para velocidad). Se le pide: "Estructura toda esta información en un perfil ESG. Dame: políticas de sostenibilidad, compromisos ambientales con fechas, certificaciones, estándares de reporte mencionados, controversias de ESG, tamaño de empleados, ubicaciones, industrias, menciones recientes en medios."
+
+   Claude retorna JSON estructurado con esos campos.
+
+5. **Guardado en DB:** Los datos estructurados se guardan en tabla `companies_profile`. Cada dato incluye su fuente (URL del artículo, página del PDF, etc.) para auditabilidad.
+
+6. **Revisión Opcional por Super Admin:** El Super Admin recibe notificación "Perfil pre-poblado listo para revisión". Puede abrir, ver los datos, editar si hay errores, y luego hacer clic "Revisar y Enviar al Cliente".
+
+7. **Cliente Recibe Perfil Pre-Poblado:** En lugar de llegar a una página vacía, el cliente ve: "Esto es lo que sabemos de tu empresa" con todos los campos pre-llenados + fuentes consultables.
+
+**Resiliencia:**
+
+- Si una fuente falla (ej: LinkedIn no permite scraping), las otras 4 siguen adelante
+- El perfil se arma incluso incompleto
+- Si todo falla, el cliente simplemente completa manualmente
+
+**Verificación:** Scraper corre automáticamente. Perfil aparece con ≥70% de precisión. Fuentes están identificables. Si falla una fuente, otras siguen.
+
+---
+
+### FASE 6: Frontend - Validación de Perfil y Materialidad (Semana 5-6)
+
+**Dependencia:** Fase 5 (perfil pre-poblado) + Fase 4 (diagnóstico UI)
+
+**¿Qué se hace?**
+
+Después de login, el cliente ve una página especial: "Valida los datos de tu empresa". Es como un checklist donde acepta/edita/rechaza cada campo que el scraper encontró.
+
+**Página: "Lo que sabemos de tu empresa"**
+
+El dev describe a Lovable: "Muestra cada campo pre-poblado con: valor, fuente (link a donde se encontró), botones Aceptar/Editar/Rechazar. Si acepta, marca como validado. Si edita, abre input. Si rechaza, descarta. Todos los campos deben validarse antes de activar el diagnóstico."
+
+Lovable genera: componentes para cada campo, lógica de estados (aceptado/editado/rechazado), validación de que todos tengan un estado.
+
+El cliente normalmente completa esta validación en 5-15 minutos.
+
+**Matriz de Materialidad:**
+
+Después de completar el diagnóstico (Fase 4), el cliente ve una matriz visual 2×2:
+- Eje X: "Importancia para el negocio" (bajo → alto)
+- Eje Y: "Impacto en el mundo" (bajo → alto)
+
+Cada riesgo ESG (IRO) que relevante aparece como un punto en esta matriz. Ejemplo: "Anemia de Biodiversidad" aparece como punto rojo (alto impacto en mundo, bajo para negocio) → ubicado en cuadrante superior izquierdo.
+
+**Ranking de Riesgos:**
+
+Debajo de la matriz aparece un listado ordenado por score:
+
+🔴 **Riesgos Altos (Score < 40):**
+- Biodiversidad (38) — encontrado en reportes 2024, LinkedIn menciona plantaciones
+- Agua (35) — Aqueduct muestra estrés hídrico en zona
+- ...
+
+🟡 **Riesgos Medios (40-70):**
+- Derechos laborales (62) — cadena de suministro de ropa
+- ...
+
+🟢 **Riesgos Bajos (≥ 70):**
+- ...
+
+Cada riesgo es clickeable y muestra justificación: "¿Por qué score 38? Porque respondiste 'No tenemos política de biodiversidad' (+30pts) y operates en zona con biodiversidad crítica según WRI (+25pts) y Aqueduct (+30pts)."
+
+**Verificación:** Cliente valida datos en < 5 min. Matriz renderiza correctamente. Ranking de riesgos ordenado por score.
+
+---
+
+### FASE 7: Backend + Frontend - Generación de Reportes PDF (Semana 6-7)
+
+**Dependencia:** Fase 4 (diagnóstico completo) + Fase 2 (scores calculados)
+
+**¿Qué se hace?**
+
+Al finalizar el diagnóstico, el cliente obtiene un reporte exportable en PDF con todos los resultados.
+
+**Estructura del Reporte:**
+
+1. **Portada:** Logo Greentor, nombre empresa, fecha, clasificación
+2. **Score ESG Global:** Comparador donut grande (E/S/G en colores diferentes, porcentaje de cada uno)
+3. **Resumen de Riesgos por Nivel:**
+   - 🔴 5 riesgos altos
+   - 🟡 8 riesgos medios
+   - 🟢 12 riesgos bajos
+4. **Matriz de Materialidad:** Gráfico 2D con puntos
+5. **Top 10 Riesgos Críticos:** Tabla con: riesgo, score, nivel, recomendación
+6. **Plan de Acción:** "Acciones sugeridas para mejorar ESG" ordenadas por urgencia
+7. **Apéndice Técnico:** Explicación de la metodología 30/70, datos de país usados, etc.
+
+**Generación del PDF:**
+
+Se usa Puppeteer (o similar) ejecutando en el servidor (Edge Function del backend). El flujo:
+
+1. Frontend llama: "Genera PDF para empresa X"
+2. Backend arma HTML con todos los datos + gráficas
+3. Puppeteer lo convierte a PDF
+4. Guarda en Supabase Storage
+5. Retorna URL descargable
+6. Envía email al cliente con link
+
+El PDF se genera en < 30 segundos.
+
+**Componente de Preview (Frontend):**
+
+Antes de descargar, el cliente puede hacer click "Vista previa" y ver en pantalla cómo se vería el PDF.
+
+**Verificación:** PDF genera correctamente. Gráficas se ven bien. Descarga funciona. Llega por email.
+
+---
+
+### FASE 8: Frontend - Panel Super Admin (Semana 7-8)
+
+**Dependencia:** Fase 1 (DB), Fase 2 (scoring)
+
+**¿Qué se hace?**
+
+El Super Admin (operador Greentor) necesita una consola donde gestiona todo: empresas, usuarios, riesgos, APIs, suscripciones.
+
+**Dashboard Super Admin:**
+
+El dev describe a Lovable: "Crea un dashboard con KPIs: total empresas, score promedio, % de diagnósticos completados, gráfica de usuarios activos últimos 7 días, tabla de últimas acciones (empresa creada, diagnóstico completado, usuario invitado)."
+
+Lovable genera: componentes de KPI cards, gráfica de línea (Nivo o Recharts), tabla de actividad reciente.
+
+**Página: Gestión de Empresas**
+
+Tabla con: nombre, industria, país, score actual, % diagnóstico, estado (Onboarding en progreso / Completado / Error).
+
+Búsqueda y filtros por industria/país/estado.
+
+Click en fila → detalle: información editable, estado de scraper (con logs), score E/S/G, lista de usuarios.
+
+Acciones: editar, eliminar, forzar re-scraping.
+
+**Página: Onboarding & Scraping**
+
+Formulario para crear empresa: nombre, industria, país, URL, LinkedIn, contacto.
+
+Al guardar → muestra estado en vivo del scraper:
+- Queued (esperando)
+- Scraping web (25% completado)
+- Scraping PDFs (50% completado)
+- Scraping LinkedIn (75% completado)
+- Procesando con IA (90% completado)
+- Completado 100%
+
+Si hay error en cualquier etapa, muestra detalle y botón "Reintentar".
+
+Perfil pre-poblado aparece abajo (read-only hasta revisar).
+
+Botón "Revisar y Enviar al Cliente".
+
+**Página: Diagnóstico & Respuestas**
+
+Búsqueda por empresa.
+
+Tabla de todas sus respuestas. Filtro por sección (A/B/C/D).
+
+Click en respuesta → edit. Al cambiar, automáticamente recalcula el score.
+
+Historial: quién cambió qué, cuándo.
+
+**Página: Usuarios & Roles**
+
+Tabla: email, nombre, rol, empresa, activo/suspendido.
+
+Crear usuario: email, nombre, rol, empresa.
+
+Cambiar rol, suspender, eliminar.
+
+**Página: Tabla de Riesgos (IROs)**
+
+Listado de todos los riesgos ESG del sistema.
+
+Crear riesgo: código, nombre, sector aplicable, pilar (E/S/G), score base, activo.
+
+Editar, desactivar, ver detalles.
+
+Click en riesgo → expandir para ver pesos por industria (en energía pesa diferente que en retail).
+
+Bulk upload: cargar CSV con nuevos riesgos.
+
+**Página: APIs & Fuentes**
+
+Tabla de estado de APIs:
+- World Bank: ✓ Online | Última llamada hace 2 min | Latencia 180ms
+- TI CPI: ✓ Actualizado | Data de 2025 | Últ actualización hace 3 días
+- Aqueduct: ✓ Cacheado | 5.2M puntos grid | Actualizar dataset
+
+Health check que dispara cada 5 min.
+
+**Página: Suscripciones**
+
+Tabla de empresas con plan: nombre, plan (Basic/Pro/Enterprise), estado, fecha vencimiento, ciclo renovación.
+
+Acciones: cambiar plan, ver historial.
+
+Chat integrado: "¿Qué plan necesita esta empresa?" → Agente IA sugiere.
+
+**Verificación:** Super Admin puede crear empresa y ver scraper en vivo. IROs se editan y scores recalculan. Usuarios listados. APIs health check funciona.
+
+---
+
+### FASE 9: Backend - Agente IA para Chat (Semana 7-8, opcional pero incluido)
+
+**Dependencia:** Fase 1 (DB), Fase 8 (endpoints super admin)
+
+**¿Qué se hace?**
+
+Chatbot de IA integrado en el Super Admin y Admin Empresa que responde preguntas sobre suscripciones, empresas, diagnósticos.
+
+**Flujo:**
+
+1. Usuario hace click en botón de chat (esquina inferior derecha)
+2. Escribe pregunta: "¿Cuándo vence mi suscripción?"
+3. Mensaje se envía al backend
+4. Backend usa Claude (Haiku para velocidad) con contexto: rol del usuario, empresa asignada, plan actual
+5. Claude retorna respuesta en español
+6. Chat se muestra en interfaz
+
+**Prompts del Agente:**
+
+- Si es admin empresa: "Eres un asistente de Greentor. Tienes acceso a: empresa {X}, plan {Y}, vencimiento {Z}. El usuario pregunta..."
+- Si es Super Admin: "Eres un asistente de Greentor specialista en suscripciones. Tienes acceso a datos de todas las empresas. El usuario pregunta..."
+
+**Sugerencias Rápidas:**
+
+Botones pre-hechos: "¿Cuándo vence mi plan?", "¿Qué plan me recomiendas?", "¿Cuál es mi score actual?"
+
+**Verificación:** Chat responde en < 5s. Tiene acceso a datos correctos. Historial se persiste.
+
+---
+
+### FASE 10: Frontend - Documentos (Semana 8)
+
+**Dependencia:** Fase 0 (Storage configurado)
+
+**¿Qué se hace?**
+
+Clientes pueden subir documentos (PDFs, excels, etc.) por categoría.
+
+**Página de Documentos (Cliente):**
+
+5 categorías expandibles: Emisiones, Políticas, Agua, Gobernanza, Riesgos.
+
+Cada categoría tiene drag & drop: "Arrastra archivos aquí o haz click para seleccionar".
+
+Tabla debajo: documentos subidos, nombre, fecha, tamaño, estado (Nuevo / Revisado).
+
+Botón eliminar para cada documento.
+
+Max 50MB por archivo. Formatos: PDF, Excel, Word, PNG, JPEG.
+
+**Página de Documentos (Super Admin):**
+
+Tabla de todos los documentos de todas las empresas.
+
+Filtro por empresa, categoría, fecha, estado.
+
+Previsualización si es PDF.
+
+Checkbox "Revisado" — el Super Admin marca cuando validó.
+
+**Backend:**
+
+Subida a Supabase Storage con RLS: empresa A no puede acceder documentos de empresa B.
+
+Verificación: Subida funciona. Documentos listados. RLS activo.
+
+---
+
+### FASE 11: Testing, Optimización y Deployment (Semana 9-10)
+
+**Dependencia:** Todas las fases anteriores
+
+**¿Qué se hace?**
+
+Asegurar que el MVP esté listo para producción: sin errores, performance óptimo, seguro.
+
+**Testing Backend:**
+
+- Suite de 15+ pruebas automáticas para el motor de scoring (casos normales, edge cases, APIs caídas)
+- Pruebas de integración: World Bank + fallbacks funciona
+- Pruebas de RLS: usuario A no accede datos de empresa B
+- Pruebas de auditoría: cambios se registran correctamente
+- Coverage: ≥80% del código testeado
+
+**Testing Frontend:**
+
+- Pruebas de componentes clave: login, diagnóstico, reporte
+- Pruebas e2e: usuario se registra → valida perfil → completa diagnóstico → descarga reporte
+- Responsive: mobile (375px), tablet (768px), desktop (1280px+) todo funciona
+- Accesibilidad: WCAG AA mínimo (colores accesibles, teclado navegable, screen reader compatible)
+
+**Performance:**
+
+Targets que debe cumplir:
+- Dashboard carga en < 3s
+- Sección de diagnóstico carga < 1s
+- Score recalcula < 2s
+- PDF genera < 30s
+- API responses promedian < 500ms
+
+Se mide con herramientas de performance (Lighthouse, WebPageTest).
+
+**Security:**
+
+- RLS policies revisadas en todas las tablas
+- JWT tokens no guardados inseguros
+- CORS bien configurado
+- No hay credenciales en código (toda en .env)
+- Endpoint /admin/* requiere super_admin role
+
+**Deployment:**
+
+- Frontend: build optimizado, deploy a Vercel o Netlify + CDN
+- Backend: Edge Functions testeadas en staging antes de prod
+- DB: backups automáticos diarios
+- Monitoreo: alertas si API cae, si score falla, si storage lleno
+
+**Runbooks & Documentación:**
+
+- Cómo deployar cambios (git push → auto-builds → deploys)
+- Troubleshooting de APIs
+- Guía de usuario para equipo Greentor
+- FAQs para soporte a clientes
+
+**Verificación:** Todos los tests pasan. Performance meets targets. 5+ testers log in, completan diagnóstico, descargan reporte sin issues.
+
+---
+
+### FASE 12: Launch y Post-MVP (Semana 11-12)
+
+**¿Qué se hace?**
+
+Preparar para ir a producción y recopilar feedback para mejoras futuras.
+
+**Pre-Launch:**
+
+- Cargar data inicial: IROs finales de cada sector, benchmarks, países, pesos
+- Plantillas de email: bienvenida, invitación diagnóstico, reporte lista, confirmación pago
+- FAQ y documentos de soporte iniciales
+
+**Launch:**
+
+- Anunciar a early adopters (2-3 empresas piloto)
+- Monitoreo 24h en vivo de errores críticos
+- Sesiones de onboarding personalizadas con cada cliente
+
+**Post-Launch (Semanas 1-2):**
+
+- Recopilar feedback de usuarios
+- Bugs críticos se arreglan inmediatamente
+- Planificar roadmap v1.1 (integración GFW API para biodiversidad) y v1.2 (módulo especializado de riesgo hídrico para FMCG)
+
+---
+
+## Estructura de Archivos y Componentes
+
+### Backend (Supabase)
+
+**Base de Datos:**
+- 10+ tablas PostgreSQL (companies, users, survey_responses, risks, scores, documents, subscriptions, audit_log, onboarding_jobs, etc.)
+- Migrations versionadas
+
+**Edge Functions:**
+- Autenticación: login, register, logout, get-current-user
+- Scoring: motor de scoring, cálculos helpers
+- APIs externas: World Bank integration, health checks
+- Scraper: dispara, ejecuta, reintentos
+- Reportes: genera PDF
+- Documentos: upload, listado
+- Admin: CRUD empresas, usuarios, riesgos
+- Agente: chat IA
+
+Total: 25+ Edge Functions
+
+### Frontend (Lovable)
+
+**Generado Automáticamente por Lovable:**
+- 15+ páginas (login, dashboard cliente, secciones diagnóstico A/B/C/D, validación, materialidad, reportes, 8 admin pages)
+- 25+ componentes reutilizables (formularios, tablas, gráficas, cards)
+- Hooks: useAuth, useSurvey, useScore, useDocuments, useAdmin
+- Contexts: AuthContext, CompanyContext
+- Tipos base
+
+**Creado Manualmente en Git:**
+- Types extendidos: tipos detallados de User, Company, SurveyResponse, etc.
+- Validadores: esquemas Zod para cada tipo
+- Utilidades: api-client wrapper, formatting helpers, scoring display helpers
+- Configuración: Supabase client, environment vars
+- Estilos refinados: paleta Greentor customizada si necesario
+
+---
+
+## Paralelismo y Timeline
+
+**Semana 1:**
+- Backend Dev: Fase 0 + Fase 1 (DB y Auth)
+- Frontend Dev: Fase 0 + Fase 3 (Login, Sidebar, Dashboard en Lovable)
+
+**Semana 2-3:**
+- Backend Dev: Fase 2 (Motor de Scoring, intenso)
+- Frontend Dev: Fase 4 (Diagnóstico con mocks de scores)
+- Backend Dev paralelo: Fase 2B (APIs externas)
+
+**Semana 4-5:**
+- Backend Dev: Fase 5 (Onboarding Scraper)
+- Frontend Dev: Fase 4 termina, Fase 6 (Validación + Materialidad)
+
+**Semana 6-7:**
+- Backend + Frontend: Fase 7 (Reportes PDF)
+- Backend: Fase 8 (endpoints Super Admin)
+- Frontend: Fase 8 (Super Admin UI en Lovable)
+
+**Semana 7-8:**
+- Backend: Fase 9 (Agente IA)
+- Frontend: Fase 10 (Documentos)
+
+**Semana 8:**
+- Ambos: Fase 10 completar
+
+**Semana 9-10:**
+- Ambos: Fase 11 (Testing, Performance, Security)
+
+**Semana 11-12:**
+- Ambos: Fase 12 (Deployment, Launch, Post-MVP)
+
+---
+
+## Criterios de Éxito
+
+Cada fase tiene verificaciones:
+
+- **Fase 0:** Repos creados, conexión test exitosa
+- **Fase 1:** Tablas existen, RLS activa, autenticación funciona
+- **Fase 2:** Motor de scoring pasa 15+ tests, < 2s
+- **Fase 3:** Login/logout funciona, sidebar por rol, dashboard renderiza
+- **Fase 4:** 4 secciones funcionan, guardado automático, score recalcula
+- **Fase 5:** Scraper corre automático, perfil pre-poblado ≥70% accuracy
+- **Fase 6:** Cliente valida datos en < 5 min, matriz renderiza bien
+- **Fase 7:** PDF descargable y profesional
+- **Fase 8:** Super Admin gestiona empresas, usuarios, riesgos
+- **Fase 9:** Agente IA responde en < 5s
+- **Fase 10:** Documentos uploadables, RLS activo
+- **Fase 11:** Tests pasan, performance targets cumplidos, 5+ testers sin issues
+- **Fase 12:** MVP en producción, early adopters onboarded
+
+---
+
+## Decisiones Clave Tomadas
+
+1. **Frontend con Lovable:** No escribir React manual. El dev describe features → Lovable genera código → refina iterativamente. Más rápido y menos errores.
+
+2. **Scoring en backend:** Garantiza integridad, evita manipulación por usuarios. Cálculos nunca en frontend.
+
+3. **Datos pre-poblados son sugerencias:** Cliente siempre valida. No hay respuestas auto-respondidas — máxima transparencia.
+
+4. **RLS en Supabase:** Seguridad a nivel de base de datos. Empresa A no ve datos de B incluso si alguien intenta forzar.
+
+5. **Onboarding con IA:** Diferenciador clave. Cliente llega a plataforma que ya lo conoce.
+
+6. **PDF en servidor (Puppeteer):** Mejor calidad y control que librerías JavaScript.
+
+7. **Fallbacks para APIs externas:** Si World Bank cae, sistema sigue con datos locales cacheados.
+
+8. **Sin cuantificación financiera (EBITDA):** Explícitamente para v2.0 según brief.
+
+---
+
+Está listo para implementación. ¿Necesitas profundizar en alguna fase o tomar decisiones sobre infraestructura?
