@@ -1,0 +1,137 @@
+# ✅ Greentor — Code Review Checklist
+
+> Cada vez que Lovable genere o actualice código, repasa estas secciones antes de aprobar y hacer push a GitHub.
+
+**Estados:** ✅ Aprobado &nbsp;|&nbsp; ❌ Falla &nbsp;|&nbsp; ⏳ Pendiente
+
+---
+
+## 1. Funcionalidad General
+
+Verifica que lo que se construyó hace lo que se pidió.
+
+- [ ] La pantalla o flujo se ve igual al wireframe definido
+- [ ] Los botones hacen lo que deben hacer
+- [ ] Los formularios guardan la información correctamente
+- [ ] Los mensajes de error son claros y en español
+- [ ] No hay pantallas en blanco ni secciones que no cargan
+- [ ] La navegación entre secciones funciona sin romperse
+
+---
+
+## 2. Conexión con Supabase
+
+Verifica que los datos fluyen correctamente entre Lovable y la base de datos.
+
+- [ ] Los datos que el usuario ingresa llegan a la tabla correcta en Supabase
+- [ ] Los datos que se muestran en pantalla vienen de Supabase, no son datos de prueba hardcodeados
+- [ ] Cuando el usuario guarda algo, aparece reflejado inmediatamente
+- [ ] Cuando el usuario borra algo, desaparece de la base de datos
+- [ ] Si Supabase no responde, la aplicación muestra un mensaje amigable y no se rompe
+
+---
+
+## 3. Seguridad y Roles
+
+Verifica que cada usuario solo ve y hace lo que le corresponde.
+
+- [ ] Un usuario con rol Viewer no puede editar ni borrar nada
+- [ ] Un usuario Admin de empresa A no puede ver datos de empresa B
+- [ ] El Super Admin tiene acceso completo a todo
+- [ ] La ANON KEY de Supabase no está expuesta en ningún lugar visible del código
+- [ ] La SERVICE KEY de Supabase no aparece en ningún archivo del frontend
+- [ ] El archivo `.env` está en el `.gitignore` y no subió a GitHub
+
+---
+
+## 4. Onboarding Inteligente
+
+Verifica que el proceso de pre-carga de datos funciona correctamente.
+
+- [ ] Al registrar una empresa nueva en el Super Admin, el scraper se dispara automáticamente
+- [ ] El perfil pre-cargado aparece en menos de 10 minutos
+- [ ] Cada dato pre-cargado muestra su fuente de origen (URL o nombre del documento)
+- [ ] El cliente puede aceptar, editar o rechazar cada dato con un clic
+- [ ] El diagnóstico solo se activa después de que el cliente completa la validación
+- [ ] Si el scraper no encuentra información, la plataforma lo indica claramente y permite completar manualmente
+
+---
+
+## 5. Diagnóstico ESG
+
+Verifica que el flujo de preguntas funciona correctamente.
+
+- [ ] Las 4 secciones (A, B, C, D) aparecen en el orden correcto
+- [ ] El usuario puede completar una sección y continuar después sin perder progreso
+- [ ] Las preguntas con datos pre-cargados muestran la sugerencia con su fuente
+- [ ] El usuario puede aceptar, editar o ignorar cada sugerencia
+- [ ] Las preguntas específicas de Agroindustria solo aparecen cuando la empresa seleccionó esa industria
+- [ ] Al completar una sección, el score parcial se actualiza en menos de 2 segundos
+- [ ] Las respuestas se guardan automáticamente — no se pierden si el usuario cierra el navegador
+
+---
+
+## 6. Motor de Scoring
+
+Verifica que los cálculos son correctos.
+
+- [ ] El score por IRO se calcula con la fórmula 30/70 correctamente
+- [ ] El multiplicador de país se aplica solo al benchmark (no al score de empresa)
+- [ ] Los niveles de riesgo se asignan correctamente: Alto si F < 40 / Medio si 40 ≤ F < 70 / Bajo si F ≥ 70
+- [ ] El score global E, S y G refleja el promedio de los IROs de cada pilar
+- [ ] Si una sección está incompleta, el score parcial lo indica claramente
+
+---
+
+## 7. Reporte ESG
+
+Verifica que el reporte se genera y exporta correctamente.
+
+- [ ] El reporte solo se puede generar cuando el diagnóstico está 100% completo
+- [ ] El PDF incluye el score global, los tres pilares E, S y G, y el ranking de materialidad
+- [ ] El ranking de IROs muestra el nivel de riesgo (Alto, Medio, Bajo) con justificación
+- [ ] Las recomendaciones de acción son específicas al perfil de la empresa, no genéricas
+- [ ] El PDF se puede descargar sin errores
+- [ ] El nombre del archivo incluye el nombre de la empresa y la fecha
+
+---
+
+## 8. Experiencia de Usuario
+
+Verifica que la plataforma es fácil de usar y se ve bien.
+
+- [ ] Los colores son los correctos: verde `#006F63`, fondo crema `#FFF7EF`, azul `#84B3E2`, teal `#6EABA4`
+- [ ] Las fuentes son Syne para títulos, Figtree para texto general y DM Mono para números y datos
+- [ ] La plataforma funciona bien en desktop (1280px o más)
+- [ ] La plataforma funciona bien en tablet (768px)
+- [ ] La plataforma funciona bien en mobile (375px)
+- [ ] El usuario siempre sabe en qué paso está y cuánto le falta
+- [ ] No hay textos en inglés visibles para el usuario final — todo está en español
+
+---
+
+## 9. Super Admin
+
+Verifica que la consola de administración funciona correctamente.
+
+- [ ] El Super Admin puede registrar una empresa nueva sin errores
+- [ ] La tabla de empresas muestra el estado del scraping (En progreso / Listo / Error)
+- [ ] El Super Admin puede ver y editar las respuestas del diagnóstico de cualquier empresa
+- [ ] Los cambios en respuestas recalculan el score automáticamente
+- [ ] El Super Admin puede agregar, editar y desactivar usuarios
+- [ ] El agente IA de suscripciones responde en menos de 5 segundos
+- [ ] Los gráficos del dashboard muestran datos reales, no datos de ejemplo
+
+---
+
+## 10. Antes de hacer Push a GitHub
+
+Lista de verificación final antes de subir cualquier cambio.
+
+- [ ] El archivo `.env` NO está incluido en los archivos que van a subir
+- [ ] No hay keys, contraseñas ni tokens escritos directamente en el código
+- [ ] No hay `console.log` con información sensible que quedó de pruebas
+- [ ] El código corre sin errores en local antes de subirlo
+- [ ] El cambio hace exactamente lo que se describió — nada más, nada menos
+- [ ] Se documentó brevemente qué cambió en el mensaje del commit
+
