@@ -1,308 +1,282 @@
--- Seed data for Greentor MVP with RLS policies
--- 1) Crear políticas RLS (si no existen)
+- Tabla companies
+CREATE TABLE IF NOT EXISTS companies (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name text NOT NULL,
+  industry text,
+  country text,
+  website_url text,
+  linkedin_url text,
+  size_range text,
+  plan text,
+  active boolean DEFAULT true,
+  scraping_status text,
+  created_at timestamp with time zone DEFAULT now(),
+  mrr numeric,
+  logins_last_7_days integer,
+  diagnostic_progress integer
+);
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1
-    FROM pg_policies
-    WHERE schemaname = 'public'
-      AND tablename = 'companies'
-      AND policyname = 'companies_select_by_company'
-  ) THEN
-    CREATE POLICY companies_select_by_company
-      ON public.companies
-      FOR SELECT TO authenticated
-      USING (id = get_current_company_id());
-  END IF;
-END$$;
+-- Tabla users
+CREATE TABLE IF NOT EXISTS users (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  email text NOT NULL UNIQUE,
+  password_hash text,
+  role text NOT NULL,
+  company_id uuid REFERENCES companies(id) ON DELETE CASCADE,
+  is_active boolean DEFAULT true,
+  created_at timestamp with time zone DEFAULT now()
+);
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE schemaname = 'public'
-      AND tablename = 'companies'
-      AND policyname = 'companies_update_by_company'
-  ) THEN
-    CREATE POLICY companies_update_by_company
-      ON public.companies
-      FOR UPDATE TO authenticated
-      USING (id = get_current_company_id())
-      WITH CHECK (id = get_current_company_id());
-  END IF;
-END$$;
+-- Tabla profiles
+CREATE TABLE IF NOT EXISTS profiles (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid REFERENCES users(id) ON DELETE CASCADE,
+  company_id uuid REFERENCES companies(id) ON DELETE CASCADE,
+  full_name text,
+  position text,
+  phone text,
+  created_at timestamp with time zone DEFAULT now()
+);
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE schemaname = 'public'
-      AND tablename = 'companies'
-      AND policyname = 'companies_delete_by_company'
-  ) THEN
-    CREATE POLICY companies_delete_by_company
-      ON public.companies
-      FOR DELETE TO authenticated
-      USING (id = get_current_company_id());
-  END IF;
-END$$;
+-- Tabla diagnostic_responses
+CREATE TABLE IF NOT EXISTS diagnostic_responses (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id uuid REFERENCES companies(id) ON DELETE CASCADE,
+  section text,
+  question text,
+  answer text,
+  validated boolean DEFAULT false,
+  created_at timestamp with time zone DEFAULT now()
+);
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE schemaname = 'public'
-      AND tablename = 'companies'
-      AND policyname = 'companies_insert_self'
-  ) THEN
-    CREATE POLICY companies_insert_self
-      ON public.companies
-      FOR INSERT TO authenticated
-      WITH CHECK (id = get_current_company_id());
-  END IF;
-END$$;
+-- Tabla esg_scores
+CREATE TABLE IF NOT EXISTS esg_scores (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id uuid REFERENCES companies(id) ON DELETE CASCADE,
+  pillar text,
+  value numeric,
+  calculated_at timestamp with time zone DEFAULT now(),
+  formula_version text
+);
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE schemaname = 'public'
-      AND tablename = 'profiles'
-      AND policyname = 'profiles_select_by_company'
-  ) THEN
-    CREATE POLICY profiles_select_by_company
-      ON public.profiles
-      FOR SELECT TO authenticated
-      USING (company_id = get_current_company_id());
-  END IF;
-END$$;
+-- Tabla companies_profile
+CREATE TABLE IF NOT EXISTS companies_profile (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id uuid REFERENCES companies(id) ON DELETE CASCADE,
+  field_name text NOT NULL,
+  value text,
+  source text,
+  collected_at timestamp with time zone DEFAULT now()
+);
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE schemaname = 'public'
-      AND tablename = 'profiles'
-      AND policyname = 'profiles_insert_by_company'
-  ) THEN
-    CREATE POLICY profiles_insert_by_company
-      ON public.profiles
-      FOR INSERT TO authenticated
-      WITH CHECK (company_id = get_current_company_id());
-  END IF;
-END$$;
+-- Tabla iros (catálogo de riesgos ESG)
+CREATE TABLE IF NOT EXISTS iros (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  code text NOT NULL UNIQUE,
+  name text NOT NULL,
+  sector text,
+  pillar text CHECK (pillar IN ('E', 'S', 'G')),
+  base_score numeric,
+  is_active boolean DEFAULT true
+);
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE schemaname = 'public'
-      AND tablename = 'profiles'
-      AND policyname = 'profiles_update_by_company'
-  ) THEN
-    CREATE POLICY profiles_update_by_company
-      ON public.profiles
-      FOR UPDATE TO authenticated
-      USING (company_id = get_current_company_id())
-      WITH CHECK (company_id = get_current_company_id());
-  END IF;
-END$$;
+-- Tabla documents
+CREATE TABLE IF NOT EXISTS documents (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id uuid REFERENCES companies(id) ON DELETE CASCADE,
+  category text,
+  file_name text NOT NULL,
+  file_url text NOT NULL,
+  uploaded_at timestamp with time zone DEFAULT now()
+);
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE schemaname = 'public'
-      AND tablename = 'profiles'
-      AND policyname = 'profiles_delete_by_company'
-  ) THEN
-    CREATE POLICY profiles_delete_by_company
-      ON public.profiles
-      FOR DELETE TO authenticated
-      USING (company_id = get_current_company_id());
-  END IF;
-END$$;
+-- Tabla subscriptions
+CREATE TABLE IF NOT EXISTS subscriptions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id uuid REFERENCES companies(id) ON DELETE CASCADE,
+  plan_type text NOT NULL,
+  status text NOT NULL,
+  start_date date,
+  end_date date
+);
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE schemaname = 'public'
-      AND tablename = 'diagnostic_responses'
-      AND policyname = 'diag_select_by_company'
-  ) THEN
-    CREATE POLICY diag_select_by_company
-      ON public.diagnostic_responses
-      FOR SELECT TO authenticated
-      USING (company_id = get_current_company_id());
-  END IF;
-END$$;
+-- Tabla audit_log
+CREATE TABLE IF NOT EXISTS audit_log (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid REFERENCES users(id),
+  table_name text NOT NULL,
+  action text NOT NULL,
+  record_id uuid,
+  changed_at timestamp with time zone DEFAULT now(),
+  details jsonb
+);
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE schemaname = 'public'
-      AND tablename = 'diagnostic_responses'
-      AND policyname = 'diag_insert_by_company'
-  ) THEN
-    CREATE POLICY diag_insert_by_company
-      ON public.diagnostic_responses
-      FOR INSERT TO authenticated
-      WITH CHECK (company_id = get_current_company_id());
-  END IF;
-END$$;
+-- Tabla onboarding_jobs
+CREATE TABLE IF NOT EXISTS onboarding_jobs (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id uuid REFERENCES companies(id) ON DELETE CASCADE,
+  status text NOT NULL,
+  started_at timestamp with time zone DEFAULT now(),
+  finished_at timestamp with time zone,
+  error_message text
+);
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE schemaname = 'public'
-      AND tablename = 'diagnostic_responses'
-      AND policyname = 'diag_update_by_company'
-  ) THEN
-    CREATE POLICY diag_update_by_company
-      ON public.diagnostic_responses
-      FOR UPDATE TO authenticated
-      USING (company_id = get_current_company_id())
-      WITH CHECK (company_id = get_current_company_id());
-  END IF;
-END$$;
+-- Tabla survey_responses (si la necesitas además de diagnostic_responses)
+CREATE TABLE IF NOT EXISTS survey_responses (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id uuid REFERENCES companies(id) ON DELETE CASCADE,
+  section text,
+  question text,
+  answer text,
+  validated boolean DEFAULT false,
+  created_at timestamp with time zone DEFAULT now()
+);
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE schemaname = 'public'
-      AND tablename = 'diagnostic_responses'
-      AND policyname = 'diag_delete_by_company'
-  ) THEN
-    CREATE POLICY diag_delete_by_company
-      ON public.diagnostic_responses
-      FOR DELETE TO authenticated
-      USING (company_id = get_current_company_id());
-  END IF;
-END$$;
+ALTER TABLE companies ENABLE ROW LEVEL SECURITY;
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE diagnostic_responses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE esg_scores ENABLE ROW LEVEL SECURITY;
+ALTER TABLE companies_profile ENABLE ROW LEVEL SECURITY;
+ALTER TABLE documents ENABLE ROW LEVEL SECURITY;
+ALTER TABLE subscriptions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE audit_log ENABLE ROW LEVEL SECURITY;
+ALTER TABLE onboarding_jobs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE survey_responses ENABLE ROW LEVEL SECURITY;
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE schemaname = 'public'
-      AND tablename = 'esg_scores'
-      AND policyname = 'esg_select_by_company'
-  ) THEN
-    CREATE POLICY esg_select_by_company
-      ON public.esg_scores
-      FOR SELECT TO authenticated
-      USING (company_id = get_current_company_id());
-  END IF;
-END$$;
+UPDATE users SET role = 'super_admin' WHERE email = 'admin@tudominio.com';
+UPDATE users SET role = 'admin_empresa' WHERE email = 'admin-empresa@tudominio.com';
+UPDATE users SET role = 'editor_empresa' WHERE email = 'editor@tudominio.com';
+UPDATE users SET role = 'viewer_empresa' WHERE email = 'viewer@tudominio.com';
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE schemaname = 'public'
-      AND tablename = 'esg_scores'
-      AND policyname = 'esg_insert_by_company'
-  ) THEN
-    CREATE POLICY esg_insert_by_company
-      ON public.esg_scores
-      FOR INSERT TO authenticated
-      WITH CHECK (company_id = get_current_company_id());
-  END IF;
-END$$;
+UPDATE users SET role = 'admin_empresa' WHERE role = 'admin';
+UPDATE users SET role = 'editor_empresa' WHERE role = 'editor';
+UPDATE users SET role = 'viewer_empresa' WHERE role = 'viewer';
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE schemaname = 'public'
-      AND tablename = 'esg_scores'
-      AND policyname = 'esg_update_by_company'
-  ) THEN
-    CREATE POLICY esg_update_by_company
-      ON public.esg_scores
-      FOR UPDATE TO authenticated
-      USING (company_id = get_current_company_id())
-      WITH CHECK (company_id = get_current_company_id());
-  END IF;
-END$$;
+DROP POLICY IF EXISTS "Companies: Solo mi empresa" ON companies;
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE schemaname = 'public'
-      AND tablename = 'esg_scores'
-      AND policyname = 'esg_delete_by_company'
-  ) THEN
-    CREATE POLICY esg_delete_by_company
-      ON public.esg_scores
-      FOR DELETE TO authenticated
-      USING (company_id = get_current_company_id());
-  END IF;
-END$$;
+CREATE POLICY "Companies: Solo mi empresa"
+ON companies
+FOR SELECT
+USING (
+  EXISTS (
+    SELECT 1 FROM users
+    WHERE users.company_id = companies.id
+      AND users.id = auth.uid()
+  )
+);
 
--- 2) Insertar datos dummy en orden correcto
+DROP POLICY IF EXISTS "Companies: Admin puede editar" ON companies;
 
--- Companies
-INSERT INTO companies (
-  id, name, industry, country, website_url, linkedin_url, size_range, plan,
-  active, scraping_status, created_at, mrr, logins_last_7_days, diagnostic_progress
-) VALUES
-('00000000-0000-0000-0000-000000000001', 'EcoFoods S.A.', 'Alimentos', 'CL', 'https://ecofoods.cl',
- 'https://linkedin.com/company/ecofoods', '51-200', 'Startup', true, 'completed', NOW() - INTERVAL '45 days',
- 2500, 5, 70),
-('00000000-0000-0000-0000-000000000002', 'VerdeTech LLC', 'Tecnología', 'MX', 'https://verdetech.mx',
- 'https://linkedin.com/company/verdetech', '11-50', 'Growth', true, 'in_progress', NOW() - INTERVAL '20 days',
- 4200, 3, 38),
-('00000000-0000-0000-0000-000000000003', 'AguaNet SAS', 'Servicios', 'CO', 'https://aguanet.co',
- 'https://linkedin.com/company/aguanet', '201-500', 'Corporate', false, 'failed', NOW() - INTERVAL '80 days',
- 6800, 0, 15)
-ON CONFLICT (id) DO NOTHING;
+CREATE POLICY "Companies: Admin puede editar"
+ON companies
+FOR UPDATE
+USING (
+  EXISTS (
+    SELECT 1 FROM users
+    WHERE users.company_id = companies.id
+      AND users.id = auth.uid()
+      AND users.role = 'admin_empresa'
+  )
+);
 
--- Users
-INSERT INTO users (
-  id, company_id, full_name, email, role, active, created_at
-) VALUES
-('11111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-000000000001', 'Ana Martínez', 'ana@ecofoods.cl', 'admin', true, NOW() - INTERVAL '44 days'),
-('11111111-1111-1111-1111-111111111112', '00000000-0000-0000-0000-000000000002', 'Juan Pérez', 'juan@verdetech.mx', 'editor', true, NOW() - INTERVAL '19 days'),
-('11111111-1111-1111-1111-111111111113', '00000000-0000-0000-0000-000000000003', 'Laura Gómez', 'laura@aguanet.co', 'viewer', false, NOW() - INTERVAL '79 days')
-ON CONFLICT (id) DO NOTHING;
+DROP POLICY IF EXISTS "Companies: Admin puede borrar" ON companies;
 
--- Profiles
-INSERT INTO profiles (
-  id, company_id, full_name, email, role, active, created_at
-) VALUES
-('11111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-000000000001', 'Ana Martínez', 'ana@ecofoods.cl', 'admin', true, NOW() - INTERVAL '44 days'),
-('11111111-1111-1111-1111-111111111112', '00000000-0000-0000-0000-000000000002', 'Juan Pérez', 'juan@verdetech.mx', 'editor', true, NOW() - INTERVAL '19 days'),
-('11111111-1111-1111-1111-111111111113', '00000000-0000-0000-0000-000000000003', 'Laura Gómez', 'laura@aguanet.co', 'viewer', false, NOW() - INTERVAL '79 days')
-ON CONFLICT (id) DO NOTHING;
+CREATE POLICY "Companies: Admin puede borrar"
+ON companies
+FOR DELETE
+USING (
+  EXISTS (
+    SELECT 1 FROM users
+    WHERE users.company_id = companies.id
+      AND users.id = auth.uid()
+      AND users.role = 'admin_empresa'
+  )
+);
 
--- Diagnostic responses
-INSERT INTO diagnostic_responses (
-  id, company_id, section, question_id, iro, responsible_value, response_score,
-  source_hint, is_prepopulated, validated_by_client, created_at
-) VALUES
-('22222222-2222-2222-2222-222222222221', '00000000-0000-0000-0000-000000000001', 'E', 'E1',
- 'Emisiones', '70', 70, 'Análisis interno 2025', true, true, NOW() - INTERVAL '20 days'),
-('22222222-2222-2222-2222-222222222222', '00000000-0000-0000-0000-000000000001', 'S', 'S1',
- 'Condiciones laborales', '80', 80, 'Encuesta RRHH 2025', false, true, NOW() - INTERVAL '18 days'),
-('22222222-2222-2222-2222-222222222223', '00000000-0000-0000-0000-000000000002', 'G', 'G1',
- 'Gobierno corporativo', '65', 65, 'Política publicada Q1', true, false, NOW() - INTERVAL '5 days'),
-('22222222-2222-2222-2222-222222222224', '00000000-0000-0000-0000-000000000002', 'E', 'E2',
- 'Agua', '55', 55, 'Informe de consumo 2025', false, false, NOW() - INTERVAL '4 days')
-ON CONFLICT (id) DO NOTHING;
+DROP POLICY IF EXISTS "Companies: Solo super_admin puede crear" ON companies;
 
--- ESG scores
-INSERT INTO esg_scores (
-  id, company_id, pillar, iro, score_e, score_b, score_country_multiplier,
-  score_final, risk_level, calculated_at
-) VALUES
-('33333333-3333-3333-3333-333333333331', '00000000-0000-0000-0000-000000000001', 'E', 'Emisiones', 70, 60, 1.05, 66, 'medio', NOW() - INTERVAL '19 days'),
-('33333333-3333-3333-3333-333333333332', '00000000-0000-0000-0000-000000000001', 'S', 'Condiciones laborales', 80, 75, 1.02, 78, 'bajo', NOW() - INTERVAL '18 days'),
-('33333333-3333-3333-3333-333333333333', '00000000-0000-0000-0000-000000000002', 'G', 'Gobierno corporativo', 65, 67, 1.10, 71, 'medio', NOW() - INTERVAL '4 days')
-ON CONFLICT (id) DO NOTHING;
+CREATE POLICY "Companies: Solo super_admin puede crear"
+ON companies
+FOR INSERT
+WITH CHECK (
+  EXISTS (
+    SELECT 1 FROM users
+    WHERE users.id = auth.uid()
+      AND users.role = 'super_admin'
+  )
+);
+
+DELETE FROM users WHERE id = '11111111-1111-1111-1111-111111111111';
+
+DELETE FROM users WHERE id = '11111111-1111-1111-1111-111111111112';
+
+DELETE FROM users WHERE id = '11111111-1111-1111-1111-111111111113';
+
+INSERT INTO users (id, company_id, full_name, email, role, active, created_at)
+VALUES
+  ('11111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-000000000001', 'Ana Admin', 'ana@ecofoods.cl', 'admin_empresa', true, now()),
+  ('11111111-1111-1111-1111-111111111112', '00000000-0000-0000-0000-000000000001', 'Juan Editor', 'juan@ecofoods.cl', 'editor_empresa', true, now()),
+  ('11111111-1111-1111-1111-111111111113', '00000000-0000-0000-0000-000000000001', 'Laura Viewer', 'laura@ecofoods.cl', 'viewer_empresa', true, now());
+
+-- Inserta dos empresas y devuelve sus UUIDs
+INSERT INTO companies (id, name, created_at)
+VALUES
+  (gen_random_uuid(), 'Empresa Uno', NOW()),
+  (gen_random_uuid(), 'Empresa Dos', NOW())
+RETURNING id, name;
+
+DELETE FROM users WHERE email IN (
+  'isa@empresa1.com',
+  'eli@empresa1.com',
+  'vero@empresa1.com',
+  'pedro@empresa2.com',
+  'sofi@empresa2.com',
+  'luis@empresa2.com'
+);
+
+DELETE FROM companies
+WHERE id NOT IN (
+  SELECT sub.min_id
+  FROM (
+    SELECT MIN(id::text)::uuid AS min_id
+    FROM companies
+    GROUP BY name
+  ) sub
+);
+
+INSERT INTO users (id, company_id, full_name, email, role, active)
+VALUES
+  (gen_random_uuid(), '10336547-ee1a-4575-9ede-ec20b6474cb5', 'Isa Admin', 'isa@empresa1.com', 'admin_empresa', true),
+  (gen_random_uuid(), '10336547-ee1a-4575-9ede-ec20b6474cb5', 'Eli Editor', 'eli@empresa1.com', 'editor_empresa', true),
+  (gen_random_uuid(), '10336547-ee1a-4575-9ede-ec20b6474cb5', 'Vero Viewer', 'vero@empresa1.com', 'viewer_empresa', true),
+  (gen_random_uuid(), '02f01c76-a92b-4e22-a6e1-a057c8e6225e', 'Pedro Admin', 'pedro@empresa2.com', 'admin_empresa', true),
+  (gen_random_uuid(), '02f01c76-a92b-4e22-a6e1-a057c8e6225e', 'Sofi Editor', 'sofi@empresa2.com', 'editor_empresa', true),
+  (gen_random_uuid(), '02f01c76-a92b-4e22-a6e1-a057c8e6225e', 'Luis Viewer', 'luis@empresa2.com', 'viewer_empresa', true);
+
+DROP POLICY IF EXISTS "Solo mi empresa" ON companies;
+
+CREATE POLICY "Solo mi empresa"
+ON companies
+FOR SELECT
+USING (
+  EXISTS (
+    SELECT 1 FROM users
+    WHERE users.company_id = companies.id
+      AND users.id = auth.uid()
+  )
+);
+
+DROP POLICY IF EXISTS "Usuarios pueden ver su propio registro" ON users;
+
+CREATE POLICY "Usuarios pueden ver su propio registro"
+ON users
+FOR SELECT
+USING (id = auth.uid());
+
+SELECT u.full_name, u.role, c.name AS company_name
+FROM users u
+JOIN companies c ON u.company_id = c.id
+WHERE u.id = 'a4565d7a-46f8-4834-9b87-3837c9409ae4';
+
+
